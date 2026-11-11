@@ -21,7 +21,7 @@ jobs:
     env:
       SCRIPT: ${{ inputs.script }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check the tag matches VERSION
         run: |
           bash "$SCRIPT" check
