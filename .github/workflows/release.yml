@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      script:
+        description: Path of the version script in the calling repo
+        type: string
+        default: scripts/version.sh
+      move-major-tag:
+        description: After the release, point the major tag (v1 for v1.2.3) at this commit
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # The caller's job must grant this too; a called workflow cannot raise the token's permissions.
+    permissions:
+      contents: write
+    env:
+      SCRIPT: ${{ inputs.script }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag matches VERSION
+        run: |
+          bash "$SCRIPT" check
+          test "$GITHUB_REF_TYPE" = tag || { echo "run this on a tag push, not $GITHUB_REF"; exit 1; }
+          test "${GITHUB_REF_NAME#v}" = "$(tr -d '[:space:]' < VERSION)" \
+            || { echo "tag $GITHUB_REF_NAME does not match VERSION $(cat VERSION)"; exit 1; }
+      - name: Create the release from CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash "$SCRIPT" notes > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+      - name: Move the major tag
+        if: inputs.move-major-tag
+        run: |
+          major=${GITHUB_REF_NAME%%.*}
+          git tag -f "$major" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$major"
